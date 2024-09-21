@@ -1,20 +1,19 @@
 package com.example.avaliacao_app
 
-object Estoque {
-    private val _produtos = mutableListOf<Produto>()
-
-    val produtos: List<Produto>
-        get() = _produtos
+class Estoque {
+    companion object {
+        val listaProdutos = mutableListOf<Produto>()
+    }
 
     fun adicionarProduto(produto: Produto) {
-        _produtos.add(produto)
+        listaProdutos.add(produto)
     }
 
     fun calcularValorTotalEstoque(): Double {
-        return _produtos.sumOf { it.preco * it.quantidade }
+        return listaProdutos.sumOf { it.preco * it.quantidade }
     }
 
     fun calcularQuantidadeTotal(): Int {
-        return _produtos.sumOf { it.quantidade }
+        return listaProdutos.sumOf { it.quantidade }
     }
 }

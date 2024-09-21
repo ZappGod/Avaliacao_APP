@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -41,38 +42,48 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun InventarioApp() {
     val navController = rememberNavController()
-    NavHost(navController = navController, startDestination = "main") {
-        composable("main") { TelaCadastroProduto(navController) }
-        composable("productList") { TelaListaProdutos(navController) }
-        composable("productDetail/{produtoJson}") { backStackEntry ->
-            val produtoJson = backStackEntry.arguments?.getString("produtoJson") ?: ""
-            TelaDetalhesProduto(produtoJson, navController)
+    NavHost(navController = navController, startDestination = "telaCadastro") {
+        composable("telaCadastro") { TelaCadastroProduto(navController) }
+        composable("telaLista") { TelaListaProdutos(navController) }
+        composable("telaDetalhes/{produtoIndex}") { backStackEntry ->
+            val produtoIndex = backStackEntry.arguments?.getString("produtoIndex")?.toInt() ?: 0
+            TelaDetalhesProduto(produtoIndex, navController)
         }
-        composable("statistics") { TelaEstatisticas(navController) }
+        composable("telaEstatisticas") { TelaEstatisticas() }
     }
 }
 
 @Composable
-fun TelaCadastroProduto(navController: NavHostController) {
-    val context = LocalContext.current
+fun TelaCadastroProduto(navController: NavController) {
     var nome by remember { mutableStateOf("") }
     var categoria by remember { mutableStateOf("") }
     var preco by remember { mutableStateOf("") }
     var quantidade by remember { mutableStateOf("") }
 
+    val context = LocalContext.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Text(text = "Cadastro de Produto", fontSize = 22.sp)
-        Spacer(modifier = Modifier.height(12.dp))
-        TextField(value = nome, onValueChange = { nome = it }, label = { Text("Nome do Produto") })
+
+        TextField(
+            value = nome,
+            onValueChange = { nome = it },
+            label = { Text("Nome do Produto") }
+        )
         Spacer(modifier = Modifier.height(10.dp))
-        TextField(value = categoria, onValueChange = { categoria = it }, label = { Text("Categoria") })
+
+        TextField(
+            value = categoria,
+            onValueChange = { categoria = it },
+            label = { Text("Categoria") }
+        )
         Spacer(modifier = Modifier.height(10.dp))
+
         TextField(
             value = preco,
             onValueChange = { preco = it },
@@ -80,72 +91,71 @@ fun TelaCadastroProduto(navController: NavHostController) {
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
         )
         Spacer(modifier = Modifier.height(10.dp))
+
         TextField(
             value = quantidade,
             onValueChange = { quantidade = it },
             label = { Text("Quantidade em Estoque") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
         )
+        Spacer(modifier = Modifier.height(20.dp))
 
-        Spacer(modifier = Modifier.height(15.dp))
+        Button(
+            onClick = {
+                if (nome.isNotBlank() && categoria.isNotBlank() && preco.isNotBlank() && quantidade.isNotBlank()) {
+                    val precoDouble = preco.toDoubleOrNull()
+                    val quantidadeInt = quantidade.toIntOrNull()
 
-        Button(onClick = {
-            try {
-                val precoDouble = preco.toDoubleOrNull()
-                val quantidadeInt = quantidade.toIntOrNull()
+                    if (precoDouble != null && quantidadeInt != null && quantidadeInt > 0 && precoDouble >= 0) {
+                        val produto = Produto(nome, categoria, precoDouble, quantidadeInt)
+                        Estoque().adicionarProduto(produto)
+                        Toast.makeText(context, "Produto cadastrado!", Toast.LENGTH_SHORT).show()
 
-                if (nome.isBlank() || categoria.isBlank() || precoDouble == null || quantidadeInt == null || quantidadeInt < 1 || precoDouble < 0) {
-                    Toast.makeText(context, "Campos inválidos!", Toast.LENGTH_SHORT).show()
+                        // Limpar campos após o cadastro
+                        nome = ""
+                        categoria = ""
+                        preco = ""
+                        quantidade = ""
+
+                        // Navegar para a lista de produtos
+                        navController.navigate("telaLista")
+                    } else {
+                        Toast.makeText(context, "Preço ou quantidade inválidos", Toast.LENGTH_SHORT).show()
+                    }
                 } else {
-                    Estoque.adicionarProduto(Produto(nome, categoria, precoDouble, quantidadeInt))
-                    Toast.makeText(context, "Produto adicionado!", Toast.LENGTH_SHORT).show()
-                    navController.navigate("productList")
+                    Toast.makeText(context, "Preencha todos os campos!", Toast.LENGTH_SHORT).show()
                 }
-            } catch (e: Exception) {
-                Toast.makeText(context, "Erro ao cadastrar o produto: ${e.message}", Toast.LENGTH_LONG).show()
-            }
-        }) {
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Text("Cadastrar")
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Button(onClick = {
-            navController.navigate("productList")
-        }) {
-            Text("Ver Produtos")
         }
     }
 }
 
 @Composable
-fun TelaListaProdutos(navController: NavHostController) {
-    val produtos = Estoque.produtos
-    val valorTotalEstoque = Estoque.calcularValorTotalEstoque()
+fun TelaListaProdutos(navController: NavController) {
+    val produtos = Estoque.listaProdutos
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Top
+            .padding(16.dp)
     ) {
-        Text("Lista de Produtos",fontSize = 22.sp)
-        Text("Valor Total: R$ $valorTotalEstoque")
-
-        Spacer(modifier = Modifier.height(12.dp))
+        Text(text = "Lista de Produtos", fontSize = 22.sp)
 
         LazyColumn {
             items(produtos.size) { index ->
                 val produto = produtos[index]
-                Column(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp)
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("${produto.nome} (${produto.quantidade} unidades)")
+                    Text(text = "${produto.nome} (${produto.quantidade} unidades)")
                     Button(onClick = {
-                        val produtoJson = Gson().toJson(produto)
-                        navController.navigate("productDetail/$produtoJson")
+                        navController.navigate("telaDetalhes/$index")
                     }) {
                         Text("Detalhes")
                     }
@@ -153,45 +163,48 @@ fun TelaListaProdutos(navController: NavHostController) {
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        Button(onClick = { navController.navigate("statistics") }) {
+        Button(
+            onClick = {
+                navController.navigate("telaEstatisticas")
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Text("Ver Estatísticas")
         }
     }
 }
 
-
 @Composable
-fun TelaDetalhesProduto(produtoJson: String, navController: NavHostController) {
-    val produto = Gson().fromJson(produtoJson, Produto::class.java)
+fun TelaDetalhesProduto(produtoIndex: Int, navController: NavController) {
+    val produto = Estoque.listaProdutos[produtoIndex]
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
-        verticalArrangement = Arrangement.Top
+        verticalArrangement = Arrangement.Center
     ) {
-        Text("Detalhes do Produto",fontSize = 22.sp)
-        Spacer(modifier = Modifier.height(12.dp))
-        Text("Nome: ${produto.nome}")
-        Text("Categoria: ${produto.categoria}")
-        Text("Preço: R$ ${produto.preco}")
-        Text("Quantidade: ${produto.quantidade}")
+        Text(text = "Detalhes do Produto", fontSize = 22.sp)
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Text(text = "Nome: ${produto.nome}")
+        Text(text = "Categoria: ${produto.categoria}")
+        Text(text = "Preço: R$ ${produto.preco}")
+        Text(text = "Quantidade: ${produto.quantidade} unidades")
+
+        Spacer(modifier = Modifier.height(20.dp))
+
         Button(onClick = { navController.popBackStack() }) {
             Text("Voltar")
         }
     }
 }
 
-
 @Composable
-fun TelaEstatisticas(navController: NavHostController) {
-
-    val valorTotalEstoque = Estoque.calcularValorTotalEstoque()
-    val quantidadeTotalProdutos = Estoque.calcularQuantidadeTotal()
+fun TelaEstatisticas() {
+    val valorTotalEstoque = Estoque().calcularValorTotalEstoque()
+    val quantidadeTotalProdutos = Estoque().calcularQuantidadeTotal()
 
     Column(
         modifier = Modifier
@@ -200,12 +213,9 @@ fun TelaEstatisticas(navController: NavHostController) {
         verticalArrangement = Arrangement.Center
     ) {
         Text(text = "Estatísticas do Estoque", fontSize = 22.sp)
-        Spacer(modifier = Modifier.height(12.dp))
+
         Text(text = "Valor Total do Estoque: R$ $valorTotalEstoque")
         Text(text = "Quantidade Total de Produtos: $quantidadeTotalProdutos unidades")
-
-        Button(onClick = { navController.popBackStack() }) {
-            Text("Voltar")
-        }
     }
 }
+
